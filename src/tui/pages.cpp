@@ -26,6 +26,7 @@ const std::vector<PageMeta>& meta() {
 	    {Page::Packages, "Packages", "#", "Install, remove, upgrade"},
 	    {Page::Processes, "Processes", ">", "Inspect and signal tasks"},
 	    {Page::Services, "Services", "~", "systemd unit control"},
+	    {Page::Storage, "Storage", "|", "Mounted filesystem usage"},
 	    {Page::Diagnostics, "Diagnostics", "=", "Network and security"},
 	};
 	return pages;
@@ -168,14 +169,14 @@ void draw_users(const std::vector<UserAccount>& users, const UserManager& manage
 	ui::hint_line(LINES - 2, content_left(), {"a add", "l lock", "u unlock", "r refresh", "? help"});
 }
 
-void draw_packages(const PackageUiState& state, const AptPackageManager& apt) {
-	if (!apt.available()) {
+void draw_packages(const PackageUiState& state, const PackageManagerBackend* backend) {
+	if (backend == nullptr || !backend->available()) {
 		ui::heading_area(2, content_left(), "Packages", "No supported package backend on this host");
 		attron(COLOR_PAIR(ui::Warning) | A_BOLD);
 		ui::text_at(6, content_left(), "NO SUPPORTED PACKAGE BACKEND");
 		attroff(COLOR_PAIR(ui::Warning) | A_BOLD);
 		attron(COLOR_PAIR(ui::Muted));
-		ui::text_at(8, content_left(), "Apadana currently implements APT; more distro backends will follow.");
+		ui::text_at(8, content_left(), "Supported backends: APT, DNF, Pacman. More distro backends will follow.");
 		attroff(COLOR_PAIR(ui::Muted));
 		return;
 	}
@@ -186,7 +187,7 @@ void draw_packages(const PackageUiState& state, const AptPackageManager& apt) {
 	case PackageUiState::View::Search: title = "Search: " + state.query; break;
 	case PackageUiState::View::Upgradable: title = "Available upgrades"; break;
 	}
-	ui::heading_area(2, content_left(), title, "APT package control / " + std::to_string(state.packages.size()) + " results");
+	ui::heading_area(2, content_left(), title, backend->backend_name() + " package control / " + std::to_string(state.packages.size()) + " results");
 	const std::vector<Column> columns{{"PACKAGE", 28}, {"VERSION", 22}, {"DESCRIPTION", 0}};
 	ui::draw_table(5, content_left(), content_width(), state.packages, columns, state.selected, state.offset,
 	    [](const std::size_t index, const std::vector<PackageRecord>& list) {
@@ -261,6 +262,41 @@ void draw_services(const TableUiState<ServiceRecord>& state, const ServiceManage
 		attroff(COLOR_PAIR(ui::Warning));
 	}
 	ui::hint_line(LINES - 2, content_left(), {"r refresh", "s start", "x stop", "R restart", "e enable", "d disable"});
+}
+
+void draw_storage(const TableUiState<FilesystemInfo>& state, const StorageManager& manager) {
+	if (!manager.available()) {
+		ui::heading_area(2, content_left(), "Storage", "Filesystem inspection requires a mounted /proc");
+		attron(COLOR_PAIR(ui::Warning) | A_BOLD);
+		ui::text_at(6, content_left(), "STORAGE BACKEND UNAVAILABLE");
+		attroff(COLOR_PAIR(ui::Warning) | A_BOLD);
+		return;
+	}
+	ui::heading_area(2, content_left(), "Storage", std::to_string(state.records.size()) + " mounted filesystems");
+	const std::vector<Column> columns{{"DEVICE", 16}, {"MOUNT POINT", 24}, {"TYPE", 9}, {"USAGE", 24}, {"USED / TOTAL", 0}};
+	ui::draw_table(5, content_left(), content_width(), state.records, columns, state.selected, state.offset,
+	    [](const std::size_t index, const std::vector<FilesystemInfo>& list) {
+		    const auto& filesystem = list[index];
+		    const auto used = filesystem.total_bytes >= filesystem.available_bytes
+					  ? filesystem.total_bytes - filesystem.available_bytes
+					  : 0;
+		    const double ratio = filesystem.total_bytes == 0
+						? 0.0
+						: static_cast<double>(used) / static_cast<double>(filesystem.total_bytes);
+		    return std::vector<Cell>{
+		        {filesystem.device, ui::Header, true},
+		        {filesystem.mount_point, ui::Muted},
+		        {filesystem.type, ui::Muted},
+		        {ui::percent_bar(ratio, 22), ui::usage_color(ratio), ratio >= 0.7},
+		        {format_bytes(used) + " / " + format_bytes(filesystem.total_bytes), ui::Muted},
+		    };
+	    });
+	if (state.records.empty()) {
+		attron(COLOR_PAIR(ui::Muted) | A_DIM);
+		ui::text_at(8, content_left(), "No regular filesystems with capacity were found.");
+		attroff(COLOR_PAIR(ui::Muted) | A_DIM);
+	}
+	ui::hint_line(LINES - 2, content_left(), {"r refresh"});
 }
 
 void draw_diagnostics(const SystemSnapshot& snapshot) {

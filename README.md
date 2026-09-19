@@ -8,7 +8,9 @@ tools through one approachable terminal interface.
 ## Design principles
 
 - Detect capabilities instead of assuming a distribution.
-- Keep package managers and other platform tools behind backend interfaces.
+- Keep package managers and other platform tools behind a common backend
+  interface (`PackageManagerBackend`); APT, DNF, and Pacman are implemented and
+  the first available backend is selected automatically.
 - Support multiple package ecosystems on the same machine.
 - Separate unprivileged inspection from privileged mutations.
 - Never construct privileged shell commands from unchecked user input.
@@ -16,8 +18,9 @@ tools through one approachable terminal interface.
 ## Current status
 
 The current release provides a colorful ncurses control-panel interface, a
-neofetch-like system overview, local user-account management, a working APT
-package backend, live process inspection/control, systemd service control, and a
+neofetch-like system overview, local user-account management, package backends
+for APT, DNF, and Pacman with automatic detection, live process
+inspection/control, systemd service control, mounted-filesystem usage, and a
 read-only diagnostics view for network traffic and security posture.
 
 ## Build
@@ -56,15 +59,20 @@ User controls:
 - l/u: lock or unlock the selected account
 - r: refresh user accounts
 
-APT package controls:
+Package controls (APT, DNF, or Pacman, depending on the host):
 
 - s: search available packages
 - a: show installed packages
 - g: show available upgrades
 - i/d: install or remove the selected package
-- u: refresh the APT index
+- u: refresh the package index
 - U: upgrade all packages
 - r: refresh the current package view
+
+Storage controls:
+
+- Up/Down: browse mounted filesystems and their usage bars
+- r: refresh the mount list
 
 Process controls:
 
@@ -90,8 +98,8 @@ privilege elevation is required.
 
 ## Planned modules
 
-- Additional package backends such as DNF and Pacman
-- Storage, networking, logs, and system utilities
+- Additional package backends such as Zypper, APK, and Flatpak
+- Networking, logs, and system utilities
 
 ## License
 

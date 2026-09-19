@@ -7,6 +7,7 @@
 #include "apadana/package_manager.hpp"
 #include "apadana/process_manager.hpp"
 #include "apadana/service_manager.hpp"
+#include "apadana/storage_manager.hpp"
 #include "apadana/system_info.hpp"
 #include "apadana/user_manager.hpp"
 
@@ -176,20 +177,22 @@ void help_overlay(const Page page) {
 		entries.push_back({"R", "restart unit"});
 		entries.push_back({"e / d", "enable / disable at boot"});
 		entries.push_back({"r", "refresh units"});
+	} else if (page == Page::Storage) {
+		entries.push_back({"r", "refresh mounts"});
 	}
 	ui::show_help("Apadana key bindings", entries);
 }
 
-void load_package_view(PackageUiState& state, const AptPackageManager& apt) {
+void load_package_view(PackageUiState& state, const PackageManagerBackend& backend) {
 	switch (state.view) {
 	case PackageUiState::View::Installed:
-		state.packages = apt.installed_packages();
+		state.packages = backend.installed_packages();
 		break;
 	case PackageUiState::View::Search:
-		state.packages = apt.search(state.query);
+		state.packages = backend.search(state.query);
 		break;
 	case PackageUiState::View::Upgradable:
-		state.packages = apt.upgradable_packages();
+		state.packages = backend.upgradable_packages();
 		break;
 	}
 	state.loaded   = true;
@@ -207,21 +210,25 @@ int Application::run() {
 	ProcessManager process_manager;
 	ServiceManager service_manager;
 	auto users = user_manager.list_users();
+	auto package_backend = create_package_backend();
 	std::size_t selected_user = 0;
 	std::size_t user_offset   = 0;
 	PackageUiState package_state;
 	TableUiState<ProcessRecord> process_state;
 	TableUiState<ServiceRecord> service_state;
+	StorageManager storage_manager;
+	TableUiState<FilesystemInfo> storage_state;
 	bool processes_loaded = false;
 	bool services_loaded  = false;
+	bool storage_loaded   = false;
 	std::size_t page_index = 0;
 	Status status;
 
 	bool running = true;
 	while (running) {
 		const Page page = tui::page_meta()[page_index].page;
-		if (page == Page::Packages && apt.available() && !package_state.loaded) {
-			load_package_view(package_state, apt);
+		if (page == Page::Packages && package_backend != nullptr && package_backend->available() && !package_state.loaded) {
+			load_package_view(package_state, *package_backend);
 		}
 		if (page == Page::Processes && !processes_loaded) {
 			process_state.records = process_manager.list_processes();
@@ -231,15 +238,20 @@ int Application::run() {
 			service_state.records = service_manager.list_services();
 			services_loaded       = true;
 		}
+		if (page == Page::Storage && !storage_loaded) {
+			storage_state.records = storage_manager.list_filesystems();
+			storage_loaded        = true;
+		}
 
 		draw_chrome(page, status);
 		if (LINES >= 18 && COLS >= 72) {
 			switch (page) {
 			case Page::Overview: tui::draw_overview(snapshot); break;
 			case Page::Users: tui::draw_users(users, user_manager, selected_user, user_offset); break;
-			case Page::Packages: tui::draw_packages(package_state, apt); break;
+			case Page::Packages: tui::draw_packages(package_state, package_backend.get()); break;
 			case Page::Processes: tui::draw_processes(process_state, process_manager); break;
 			case Page::Services: tui::draw_services(service_state, service_manager); break;
+			case Page::Storage: tui::draw_storage(storage_state, storage_manager); break;
 			case Page::Diagnostics: tui::draw_diagnostics(snapshot); break;
 			}
 		}
@@ -305,9 +317,10 @@ int Application::run() {
 		}
 
 		case Page::Packages: {
-			if (!apt.available()) {
+			if (package_backend == nullptr || !package_backend->available()) {
 				break;
 			}
+			auto& apt = *package_backend;
 			if (handle_table_key(key, package_state.selected, package_state.packages.size())) {
 				break;
 			}
@@ -417,6 +430,18 @@ int Application::run() {
 			break;
 		}
 
+		case Page::Storage:
+			if (handle_table_key(key, storage_state.selected, storage_state.records.size())) {
+				break;
+			}
+			if (key == 'r') {
+				storage_state.records = storage_manager.list_filesystems();
+				storage_state.selected =
+				    storage_state.records.empty() ? 0 : std::min(storage_state.selected, storage_state.records.size() - 1);
+				status = {"Filesystem list refreshed", ui::Success};
+			}
+			break;
+
 		case Page::Diagnostics:
 			if (key == 'r') {
 				snapshot = collect_system_snapshot();
@@ -429,6 +454,7 @@ int Application::run() {
 		ui::keep_visible(package_state.selected, package_state.offset);
 		ui::keep_visible(process_state.selected, process_state.offset);
 		ui::keep_visible(service_state.selected, service_state.offset);
+		ui::keep_visible(storage_state.selected, storage_state.offset);
 	}
 	return 0;
 }

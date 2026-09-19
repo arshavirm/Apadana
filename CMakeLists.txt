@@ -21,6 +21,7 @@ add_library(apadana_core
     src/core/platform.cpp
     src/core/process_manager.cpp
     src/core/service_manager.cpp
+    src/core/storage_manager.cpp
     src/core/system_info.cpp
     src/core/user_manager.cpp
 )

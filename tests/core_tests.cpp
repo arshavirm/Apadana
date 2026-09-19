@@ -3,6 +3,7 @@
 #include "apadana/platform.hpp"
 #include "apadana/process_manager.hpp"
 #include "apadana/service_manager.hpp"
+#include "apadana/storage_manager.hpp"
 #include "apadana/system_info.hpp"
 #include "apadana/user_manager.hpp"
 
@@ -67,6 +68,43 @@ VERSION_ID="42"
 	const auto upgrades = apadana::parse_apt_upgradable("Listing...\nbase-files/noble-updates 13.1 amd64 [upgradable from: 13.0]\n");
 	expect(upgrades.size() == 1, "parse upgrade count");
 	expect(upgrades[0].name == "base-files" && upgrades[0].version == "13.1" && upgrades[0].upgradable, "parse upgrade item");
+
+	expect(apadana::DnfPackageManager::valid_package_name("kernel-core"), "valid RPM package name");
+	expect(!apadana::DnfPackageManager::valid_package_name("Bad.Name"), "reject uppercase RPM package name");
+	const auto rpm_installed = apadana::parse_rpm_qa("bash\t5.2.26-1\tGNU shell\n");
+	expect(rpm_installed.size() == 1 && rpm_installed[0].name == "bash" && rpm_installed[0].version == "5.2.26-1",
+	    "parse rpm -qa listing");
+	const auto dnf_search = apadana::parse_dnf_search(
+	    "Last metadata expiration check: 0:00:01 ago\nhtop : Interactive process viewer for Linux\n==== ================\n");
+	expect(dnf_search.size() == 1 && dnf_search[0].name == "htop" && dnf_search[0].description == "Interactive process viewer for Linux",
+	    "parse dnf search output");
+	const auto dnf_updates = apadana::parse_dnf_check_update(
+	    "Last metadata expiration check\nkernel.x86_64\t6.12.0\trepo\nopenssl-libs.x86_64 1:3.2.0\trepo\n");
+	expect(dnf_updates.size() == 2 && dnf_updates[0].name == "kernel" && dnf_updates[1].name == "openssl-libs" &&
+	           dnf_updates[0].upgradable,
+	    "parse dnf check-update output");
+
+	expect(apadana::PacmanPackageManager::valid_package_name("python-pip"), "valid pacman package name");
+	expect(!apadana::PacmanPackageManager::valid_package_name("-Syu"), "reject pacman option-like name");
+	const auto pacman_installed = apadana::parse_pacman_query("bash 5.2.26-1\ncoreutils 9.5-1\n");
+	expect(pacman_installed.size() == 2 && pacman_installed[1].version == "9.5-1", "parse pacman -Q listing");
+	const auto pacman_search = apadana::parse_pacman_search("extra/htop 3.3.0-1 [installed]\n    Interactive process viewer\n");
+	expect(pacman_search.size() == 1 && pacman_search[0].name == "htop" &&
+	           pacman_search[0].description == "Interactive process viewer",
+	    "parse pacman -Ss output");
+	const auto pacman_upgrades = apadana::parse_pacman_upgradable("linux 6.12.1.arch1-1 -> 6.12.2.arch1-1\n");
+	expect(pacman_upgrades.size() == 1 && pacman_upgrades[0].name == "linux" && pacman_upgrades[0].upgradable,
+	    "parse pacman upgradable output");
+
+	apadana::StorageManager storage_manager;
+	if (storage_manager.available()) {
+		expect(!storage_manager.list_filesystems().empty(), "discover mounted filesystems");
+	}
+	expect(apadana::is_pseudo_filesystem("proc") && !apadana::is_pseudo_filesystem("ext4"), "classify pseudo filesystems");
+	std::istringstream mounts_input("/dev/nvme0n1p2 /mnt/my\\040disk ext4 rw 0 0\nproc /proc proc rw 0 0\n");
+	const auto mounts = apadana::parse_mounts(mounts_input);
+	expect(mounts.size() == 1 && mounts[0].mount_point == "/mnt/my disk" && mounts[0].type == "ext4",
+	    "parse mounts with escaped paths and skip pseudo filesystems");
 
 	const auto captured = apadana::run_command_capture({"printf", "%s", "safe;literal"});
 	expect(captured.success && captured.output == "safe;literal", "execute arguments without shell interpretation");
