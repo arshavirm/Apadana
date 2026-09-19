@@ -40,9 +40,15 @@ User-management backends are selected by capability: shadow-utils on Linux or
 
 - Left/Right or Tab: change control-panel module
 - Up/Down or j/k: move through tables
+- PageUp/PageDown: scroll tables by ten rows
+- g/G or Home/End: jump to the first or last row
+- ?: open the key-binding help overlay
 - q: quit
-- Diagnostics: inspect network interface activity, byte counters, ASLR status,
-  and available firewall tooling; press `r` to refresh.
+
+Every table shows a scroll position indicator on its right edge, and action
+results are reported in the colored status bar. Diagnostics inspects network
+interface activity, byte counters, ASLR status, and available firewall
+tooling; press `r` to refresh.
 
 User controls:
 

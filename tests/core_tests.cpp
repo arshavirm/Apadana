@@ -82,6 +82,9 @@ VERSION_ID="42"
 	expect(apadana::read_process_command(command_line, "fallback") == "python worker.py", "parse process command line");
 	std::istringstream empty_command;
 	expect(apadana::read_process_command(empty_command, "kernel-thread") == "kernel-thread", "fall back to process comm");
+	std::istringstream multiline_command(std::string("python\nworker.py\ttask\r-x"));
+	expect(apadana::read_process_command(multiline_command, "fallback") == "python worker.py task -x",
+	    "sanitize control characters in process command");
 	apadana::ProcessManager process_manager;
 	if (process_manager.available()) {
 		expect(!process_manager.list_processes().empty(), "discover live processes from procfs");

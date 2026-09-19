@@ -62,7 +62,12 @@ bool parse_proc_stat(const std::string_view line, char& state, std::uint64_t& cp
 
 std::string read_process_command(std::istream& command_line, const std::string_view fallback) {
 	std::string command((std::istreambuf_iterator<char>(command_line)), std::istreambuf_iterator<char>());
-	std::replace(command.begin(), command.end(), '\0', ' ');
+	for (char& character : command) {
+		// Control characters (newlines, tabs, NUL) would corrupt single-line rendering.
+		if (static_cast<unsigned char>(character) < 0x20 || static_cast<unsigned char>(character) == 0x7f) {
+			character = ' ';
+		}
+	}
 	command = trim(std::move(command));
 	return command.empty() ? std::string(fallback) : command;
 }

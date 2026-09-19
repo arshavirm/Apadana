@@ -37,6 +37,9 @@ endif()
 add_executable(apadana
     src/main.cpp
     src/tui/application.cpp
+    src/tui/pages.cpp
+    src/tui/theme.cpp
+    src/tui/widgets.cpp
 )
 target_include_directories(apadana PRIVATE ${CURSES_INCLUDE_DIRS})
 target_link_libraries(apadana PRIVATE apadana_core ${CURSES_LIBRARIES})
